@@ -1,6 +1,8 @@
 import {Component, ElementRef, OnInit, ViewChild} from '@angular/core';
 import {AppService} from './app.service';
 import {Tarea} from './tarea';
+import {ColumnHeader, TableSortingService} from './table-sorting.service';
+
 
 @Component({
   selector: 'app-root',
@@ -13,79 +15,47 @@ export class AppComponent implements OnInit {
   @ViewChild('inputTarea', {static: false}) inputTarea: ElementRef<HTMLInputElement>;
   tareas: Tarea[];
 
+  titles: ColumnHeader<Tarea>[] = [
+    {
+      name: 'titulo',
+      prop: 'titulo',
+      sorting: false,
+      direction: 'up',
+      sortFunction: (col) => this.tableService.sortByText(col, (tarea) => tarea[col.prop])
+    },
+    {
+      name: 'minutos',
+      prop: 'minutos',
+      sorting: false,
+      direction: 'up',
+      sortFunction: (col) => this.tableService.sortByNumber(col, (tarea) => tarea[col.prop])
+    },
+  ];
+
+
   constructor(
     public service: AppService,
+    public tableService: TableSortingService<Tarea>,
   ) {
   }
 
   ngOnInit() {
-    this.obtenerTareas();
+    this.obtenerTareas().then(() => {
+      this.tableService.setEntitiesArray(this.tareas);
+      this.tableService.setTitles(this.titles);
+    });
   }
 
   async obtenerTareas() {
     this.tareas = await this.service.obtenerTareas();
   }
 
-  getDirection(arrowUp, arrowDown): 'up' | 'down' {
-    if (
-      arrowUp.classList.contains('hidden') &&
-      arrowDown.classList.contains('hidden')
-    ) {
-      return 'up';
-    }
-
-    if (arrowUp.classList.contains('hidden')) {
-      return 'up';
-    }
-    return 'down';
-  }
-
-  sortCol(col: HTMLTableHeaderCellElement, prop: string, fn: (row: Tarea[], direction: string) => void) {
-    const arrowUp = col.querySelector('i.fa-chevron-up');
-    const arrowDown = col.querySelector('i.fa-chevron-down');
-    const direction = this.getDirection(arrowUp, arrowDown);
-
-    fn(this.tareas, direction);
-    if (direction === 'up') {
-      arrowUp.classList.remove('hidden');
-      arrowDown.classList.add('hidden');
-    }
-
-    if (direction === 'down') {
-      arrowUp.classList.add('hidden');
-      arrowDown.classList.remove('hidden');
-    }
-  }
-
-  sortByText(col: HTMLTableHeaderCellElement, prop: string) {
-    console.log('sortByTime');
-    this.sortCol(col, prop, (rows, direction) => {
-      rows.sort((a, b) => {
-        if (direction !== 'up') {
-          return a[prop].localeCompare(b[prop]);
-        }
-        return b[prop].localeCompare(a[prop]);
-      });
-    });
-  }
-
-  sortByTime(col: HTMLTableHeaderCellElement, prop: string) {
-    console.log('sortByTime');
-    this.sortCol(col, prop, (rows, direction) => {
-      rows.sort((a, b) => {
-        if (direction !== 'up') {
-          return Number(a[prop]) - Number(b[prop]);
-        }
-        return Number(b[prop]) - Number(a[prop]);
-      });
-    });
-  }
 
   addTask() {
     const titulo = this.inputTarea.nativeElement.value;
     const minutos = Number(this.inputTime.nativeElement.value);
     this.tareas.push({
-      id: this.tareas.length + 1,
+      id: this.tareas.reduce((MAX, {id}) => Math.max(MAX, id), -Infinity) + 1,
       titulo,
       minutos,
     });
@@ -95,8 +65,12 @@ export class AppComponent implements OnInit {
     this.tareas = this.tareas.filter((tarea) => !tarea.selected);
   }
 
-  markSelectedTasks(b: boolean) {
-    this.tareas.forEach((tarea) => {
+  markSelectedTasks(b?: boolean) {
+    this.tareas.filter((tarea) => tarea.selected).forEach((tarea) => {
+      if (b === undefined) {
+        tarea.mark = !tarea.mark;
+        return;
+      }
       tarea.mark = b;
     });
   }
@@ -109,11 +83,8 @@ export class AppComponent implements OnInit {
     tarea.mark = !tarea.mark;
   }
 
-  sortAleatory() {
-    this.tareas.sort(() => Math.random() - 0.5);
-  }
-
   selectAll() {
-    this.tareas.forEach((tarea) => tarea.selected = true);
+    const isAllSelected = this.tareas.every((tarea) => tarea.selected);
+    this.tareas.forEach((tarea) => tarea.selected = !isAllSelected);
   }
 }
